@@ -10,6 +10,6 @@ in the docs is the one working internally, but I have no way to test it
 against the real backend.
 
 I will be uploading it to pypi ASA I get something implemented. My main focus
-is to support Broadcasts, as is the thing I definetly most like.
+is to support Broadcasts, as is the thing I definitely most like.
 
 Grooveshark name and such stuff is property of Escape Media Group.
