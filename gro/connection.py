@@ -4,6 +4,7 @@ import hmac
 import logging
 
 import requests
+from gro.exception import GroErrorCodeException, GroRuntimeException
 
 
 try:
@@ -14,7 +15,7 @@ except ImportError:
 logger = logging.getLogger('gro.connection')
 
 
-class GroConnection(object):
+class Connection(object):
     """
     Manages all the connections to Grooveshark, as a way to put together
     all the API calls.
@@ -30,7 +31,7 @@ class GroConnection(object):
         assert isinstance(secret, unicode)
         self.key = key
         self.secret = secret
-        self.protocol = 'http'
+        self.protocol = 'https'
         self.host = 'api.grooveshark.com'
         self.endpoint = '/ws3.php'
         self.connection = requests.Session()
@@ -49,7 +50,7 @@ class GroConnection(object):
         msg = {'method': method}
         if params:
             msg['parameters'] = params
-        msg = self.compose_payload(msg)
+        msg = self.compose_payload(msg, session)
         msg_str = json.dumps(msg)
         signature = self.sign_request(msg_str)
 
@@ -60,7 +61,12 @@ class GroConnection(object):
             params = {'sig': signature},
         )
         prep_req = self.connection.prepare_request(request)
-        response = self.connection.send(prep_req)
+        response = self.connection.send(prep_req).json()
+        if 'errors' in response:
+            raise GroErrorCodeException(
+                response['errors'][0]['code'],
+                response['errors'][0]['message'],
+            )
         return response
 
     session = None
@@ -82,7 +88,7 @@ class GroConnection(object):
         hash.update(payload)
         return hash.hexdigest()
 
-    def compose_payload(self, message):
+    def compose_payload(self, message, session):
         """
         Add all the needed headers to the message
         :param message:
@@ -90,6 +96,21 @@ class GroConnection(object):
         """
         assert isinstance(message, dict)
         message['header'] = {'wsKey': self.key}
-        if self.session:
+        if session:
+            if not self.session:
+                self.create_session()
             message['header']['sessionID'] = self.session
         return message
+
+    def create_session(self):
+        response = self.request('startSession')
+        if not response.get('result',{}).get('success', False):
+            raise GroRuntimeException(
+                response.get('result',{}).get('success', False),
+                response.get('result',{})
+            )
+        self.session = response['result']['sessionID']
+
+    def ping_service(self):
+        response = self.request('pingService')
+        return response
